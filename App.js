@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { StyleSheet, Text, View, TouchableNativeFeedback } from 'react-native';
+import { StyleSheet, Text, View, Button } from 'react-native';
 import io from 'socket.io-client';
 import {
   RTCPeerConnection,
@@ -32,7 +32,8 @@ export default class App extends Component {
   };
   componentDidMount = () => {
     this.socket = io.connect(
-      'http://localhost:4443',
+      'https://localhost:4443',
+      //'https://cakeweb.herokuapp.com/',
       { transports: ['websocket'] },
     );
     this.socket.on('exchange', (data) => {
@@ -45,6 +46,7 @@ export default class App extends Component {
     this.socket.on('connect', (data) => {
       //console.tron.log('connect');
       this.getLocalStream(true, (stream) => {
+        if (localStream) return;
         localStream = stream;
         this.setState({
           selfViewSrc: stream.toURL(),
@@ -54,6 +56,28 @@ export default class App extends Component {
       });
     });
   };
+
+  switchVideoType = () => {
+    const isFront = !this.state.isFront;
+    this.setState({ isFront });
+    this.getLocalStream(isFront, (stream) => {
+      if (localStream) {
+        for (const id in pcPeers) {
+          const pc = pcPeers[id];
+          pc && pc.removeStream(localStream);
+        }
+        localStream.release();
+      }
+      localStream = stream;
+      this.setState({ selfViewSrc: stream.toURL() });
+
+      for (const id in pcPeers) {
+        const pc = pcPeers[id];
+        pc && pc.addStream(localStream);
+      }
+    });
+  };
+
   exchange = (data) => {
     const fromId = data.from;
     let pc;
@@ -174,7 +198,7 @@ export default class App extends Component {
         }, 1000);
       }
       if (event.target.iceConnectionState === 'connected') {
-        createDataChannel();
+        //createDataChannel();
       }
     };
     pc.onsignalingstatechange = (event) => {
@@ -194,33 +218,7 @@ export default class App extends Component {
     };
 
     pc.addStream(localStream);
-    console.tron.log({localStream})
-    createDataChannel = () => {
-      if (pc.textDataChannel) {
-        return;
-      }
-      const dataChannel = pc.createDataChannel('text');
-
-      dataChannel.onerror = (error) => {
-        //console.tron.log('dataChannel.onerror', error);
-      };
-
-      dataChannel.onmessage = (event) => {
-        //console.tron.log('dataChannel.onmessage:', event.data);
-        this.receiveTextData({ user: socketId, message: event.data });
-      };
-
-      dataChannel.onopen = () => {
-        //console.tron.log('dataChannel.onopen');
-        this.setState({ textRoomConnected: true });
-      };
-
-      dataChannel.onclose = ()=> {
-        //console.tron.log('dataChannel.onclose');
-      };
-
-      pc.textDataChannel = dataChannel;
-    }
+    console.tron.log({ localStream });
     return pc;
   };
 
@@ -271,17 +269,14 @@ export default class App extends Component {
     return (
       <View style={styles.container}>
         <Text style={styles.welcome}>{this.state.info}</Text>
-        {this.state.textRoomConnected && <Text style={styles.welcome}>conectada</Text>}
+        {this.state.textRoomConnected && (
+          <Text style={styles.welcome}>conectada</Text>
+        )}
         <View style={{ flexDirection: 'row' }}>
           <Text>
             {this.state.isFront ? 'Use front camera' : 'Use back camera'}
           </Text>
-          <TouchableNativeFeedback
-            style={{ borderWidth: 1, borderColor: 'black' }}
-            onPress={this._switchVideoType}
-          >
-            <Text>Switch camera</Text>
-          </TouchableNativeFeedback>
+          <Button title="trocar Camera" onPress={this.switchVideoType} />
         </View>
         <View>
           <Text>{this.state.info}</Text>
